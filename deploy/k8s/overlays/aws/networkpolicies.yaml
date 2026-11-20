@@ -1,0 +1,18 @@
+# Cognito publishes signing keys at https://cognito-idp.<region>.amazonaws.com.
+# NetworkPolicy cannot filter by hostname, so allow HTTPS to public addresses
+# only: private ranges and the instance metadata service stay blocked, which
+# keeps a compromised pod from reaching IMDS or the node's private network.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: jwks-egress-aws}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [expenses, audit]}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10]
+      ports: [{protocol: TCP, port: 443}]

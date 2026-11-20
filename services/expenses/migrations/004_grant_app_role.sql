@@ -1,6 +1,6 @@
 -- Privileges of the runtime role. Migrations run as expenses_migrator, which
 -- owns the schema; the service connects as expenses_app, which can only read
--- and write the rows it needs. Roles are created by deploy/db/bootstrap.sql.
+-- and write the rows it needs. Roles are created by deploy/k8s/base/db/bootstrap.sql.
 
 -- +goose Up
 GRANT USAGE ON SCHEMA expenses TO expenses_app;

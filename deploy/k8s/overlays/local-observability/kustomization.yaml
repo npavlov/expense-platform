@@ -1,0 +1,16 @@
+# Optional local profile: the local stand plus Prometheus with alert rules.
+#   make local-up OBSERVABILITY=1   ->  http://127.0.0.1:30090 (port-forward)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: expense-platform-local
+
+resources:
+  - ../local
+  - prometheus.yaml
+
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - prometheus.yml
+      - alerts.yml

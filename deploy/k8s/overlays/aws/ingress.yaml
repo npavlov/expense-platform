@@ -1,0 +1,27 @@
+# The only path from the internet into the cluster: HTTPS on 443 via the k3s
+# Traefik controller, which gets a Let's Encrypt certificate (HTTP-01 on port
+# 80, configured by cloud-init). Port 80 otherwise only redirects to 443.
+# Not routed: PostgreSQL, audit's internal ingestion port, metrics, admin.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: public-api
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: api.placeholder.invalid
+      http:
+        paths:
+          - path: /v1/audit
+            pathType: Prefix
+            backend: {service: {name: audit, port: {name: http}}}
+          - path: /v1
+            pathType: Prefix
+            backend: {service: {name: expenses, port: {name: http}}}
+          - path: /health
+            pathType: Exact
+            backend: {service: {name: expenses, port: {name: http}}}

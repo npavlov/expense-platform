@@ -21,3 +21,8 @@ crash.log
 
 # Local secrets
 .env
+
+# Local generated state (kustomizations with image tags, port-forward PIDs)
+/.local/
+# Database dumps
+/backups/

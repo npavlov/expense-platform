@@ -1,0 +1,83 @@
+# Schema migrations, run as each service's migrator role.
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: expenses-migrate
+  labels: {app.kubernetes.io/name: expenses-migrate, expense-platform/job: setup}
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: expenses-migrate, app.kubernetes.io/component: migration, expense-platform/db-client: "true"}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: db-jobs
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532  # secret files are mode 0440, group-readable by the pod only
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: migrate
+          image: expense-platform/expenses
+          command: ["/usr/local/bin/migrate", "up"]
+          env:
+            - {name: DATABASE_URL_FILE, value: /var/run/secrets/expense-platform/db/url}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: db, mountPath: /var/run/secrets/expense-platform/db, readOnly: true}
+      volumes:
+        - name: db
+          # Migrator credentials exist only in this Job, never in the service pod.
+          secret: {secretName: expenses-migrator-db, defaultMode: 0440}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: audit-migrate
+  labels: {app.kubernetes.io/name: audit-migrate, expense-platform/job: setup}
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: audit-migrate, app.kubernetes.io/component: migration, expense-platform/db-client: "true"}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: db-jobs
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532  # secret files are mode 0440, group-readable by the pod only
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: migrate
+          image: expense-platform/audit
+          command: ["/usr/local/bin/migrate", "up"]
+          env:
+            - {name: DATABASE_URL_FILE, value: /var/run/secrets/expense-platform/db/url}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: db, mountPath: /var/run/secrets/expense-platform/db, readOnly: true}
+      volumes:
+        - name: db
+          # Migrator credentials exist only in this Job, never in the service pod.
+          secret: {secretName: audit-migrator-db, defaultMode: 0440}

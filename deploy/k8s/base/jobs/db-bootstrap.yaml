@@ -1,0 +1,62 @@
+# Creates database roles and schemas (deploy/k8s/base/db/bootstrap.sql).
+# Idempotent; scripts/deploy.sh recreates this Job on every deploy.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-bootstrap
+  labels: {app.kubernetes.io/name: db-bootstrap, expense-platform/job: setup}
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: db-bootstrap, app.kubernetes.io/component: migration, expense-platform/db-client: "true"}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: db-jobs
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: bootstrap
+          image: postgres:17.12-alpine@sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              s=/var/run/secrets/expense-platform
+              export PGPASSWORD="$(cat $s/postgres/password)"
+              until pg_isready -q -h postgres -U postgres -d expense_platform; do echo "waiting for postgres"; sleep 2; done
+              psql -h postgres -U postgres -d expense_platform --single-transaction -q -v ON_ERROR_STOP=1 \
+                -v db=expense_platform \
+                -v expenses_migrator_password="$(cat $s/roles/expenses_migrator)" \
+                -v expenses_app_password="$(cat $s/roles/expenses_app)" \
+                -v audit_migrator_password="$(cat $s/roles/audit_migrator)" \
+                -v audit_app_password="$(cat $s/roles/audit_app)" \
+                -f /sql/bootstrap.sql
+              echo "roles and schemas are in place"
+          env:
+            - {name: HOME, value: /tmp}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: sql, mountPath: /sql, readOnly: true}
+            - {name: superuser, mountPath: /var/run/secrets/expense-platform/postgres, readOnly: true}
+            - {name: roles, mountPath: /var/run/secrets/expense-platform/roles, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: sql
+          configMap: {name: db-bootstrap-sql}
+        - name: superuser
+          secret: {secretName: postgres-superuser, defaultMode: 0440}
+        - name: roles
+          secret: {secretName: db-role-passwords, defaultMode: 0440}
+        - {name: tmp, emptyDir: {}}

@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+rule_files:
+  - /etc/prometheus/alerts.yml
+scrape_configs:
+  # Static targets through the Services: Prometheus needs no Kubernetes API
+  # access (no RBAC), at the price of seeing one replica per service.
+  - job_name: expenses
+    static_configs: [{targets: ["expenses:9090"]}]
+  - job_name: audit
+    static_configs: [{targets: ["audit:9090"]}]

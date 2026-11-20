@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Integration tests against a throwaway PostgreSQL, set up like production:
 #   1. start a clean container
-#   2. create roles and schemas with deploy/db/bootstrap.sql (as superuser)
+#   2. create roles and schemas with deploy/k8s/base/db/bootstrap.sql (as superuser)
 #   3. apply each service's migrations as that service's migrator role
 #   4. run each module's tests tagged "integration" as the runtime role
 # The container is removed afterwards, also on failure (KEEP_DB=1 keeps it).
@@ -47,10 +47,10 @@ for role in expenses_migrator expenses_app audit_migrator audit_app; do
 done
 pw() { local v="pw_$1"; echo "${!v}"; }
 
-docker exec -i "$container" psql -q -U postgres -d "$db" -v ON_ERROR_STOP=1 -v db="$db" \
+docker exec -i "$container" psql -q -U postgres -d "$db" --single-transaction -v ON_ERROR_STOP=1 -v db="$db" \
   -v expenses_migrator_password="$(pw expenses_migrator)" -v expenses_app_password="$(pw expenses_app)" \
   -v audit_migrator_password="$(pw audit_migrator)" -v audit_app_password="$(pw audit_app)" \
-  < "$root/deploy/db/bootstrap.sql"
+  < "$root/deploy/k8s/base/db/bootstrap.sql"
 
 for s in "${services[@]}"; do
   [[ -d "$root/services/$s/cmd/migrate" ]] || continue

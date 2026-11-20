@@ -1,0 +1,14 @@
+# Only source needed by the Dockerfiles enters the build context.
+.git
+.github
+.local
+backups
+docs
+infra
+deploy
+tests
+**/*.tfstate*
+**/.terraform
+**/.env
+**/*_test.go
+**/testdata

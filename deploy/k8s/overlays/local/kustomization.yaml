@@ -1,0 +1,53 @@
+# Local stand on Docker Desktop Kubernetes. Deployed by scripts/deploy-local.sh,
+# which also builds the images and generates secrets outside Git.
+#
+# No Service is exposed outside the cluster. The Mac reaches the APIs through
+# scripts/port-forward.sh, bound to 127.0.0.1: Docker Desktop publishes
+# NodePort/LoadBalancer services on all interfaces, which would put the
+# password-less dev identity provider on the local network.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: expense-platform-local
+
+resources:
+  - namespace.yaml
+  - ../../base
+  - devidp.yaml
+  - networkpolicies.yaml
+
+configMapGenerator:
+  - name: auth-config
+    literals:
+      # Same verifier as in AWS; only the trusted issuer differs. The http
+      # issuer is allowed explicitly and only here (see tests/manifests).
+      - AUTH_ISSUER=http://devidp:8080
+      - AUTH_CLIENT_IDS=expense-platform-local
+      - AUTH_ALLOW_INSECURE_ISSUER=true
+  - name: expenses-config
+    literals:
+      # Short cap so the outage demo catches up within seconds.
+      - OUTBOX_BACKOFF_MAX=5s
+  - name: devidp-config
+    literals:
+      - ISSUER=http://devidp:8080
+      - CLIENT_ID=expense-platform-local
+
+images:
+  - {name: expense-platform/expenses, newTag: dev}
+  - {name: expense-platform/audit, newTag: dev}
+  - {name: expense-platform/devidp, newTag: dev}
+
+patches:
+  # Docker Desktop serves locally built images to the node on pull;
+  # tags are content-addressed by the deploy script, so IfNotPresent is safe.
+  - target: {kind: Deployment}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+  - target: {kind: Job}
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent

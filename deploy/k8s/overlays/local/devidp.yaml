@@ -1,0 +1,57 @@
+# Local stand-in for Cognito (tools/devidp). Not part of base, so the AWS
+# overlay cannot contain it.
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: devidp}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devidp
+  labels: {app.kubernetes.io/name: devidp}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: devidp}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: devidp, app.kubernetes.io/component: identity}
+    spec:
+      serviceAccountName: devidp
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: devidp
+          image: expense-platform/devidp
+          envFrom:
+            - configMapRef: {name: devidp-config}
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 200m, memory: 64Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devidp
+  labels: {app.kubernetes.io/name: devidp}
+spec:
+  selector: {app.kubernetes.io/name: devidp}
+  ports:
+    - {name: http, port: 8080, targetPort: http}

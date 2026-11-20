@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels: {app.kubernetes.io/name: postgres}
+spec:
+  serviceName: postgres
+  replicas: 1  # single instance by design: see docs/architecture.md, "Single points of failure"
+  selector:
+    matchLabels: {app.kubernetes.io/name: postgres}
+  # Keep the volume when the StatefulSet is deleted or scaled down; only
+  # "make local-destroy" (namespace deletion) removes the data.
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: postgres, app.kubernetes.io/component: database}
+    spec:
+      serviceAccountName: postgres
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70   # postgres user of the alpine image
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: postgres
+          image: postgres:17.12-alpine@sha256:526f86d93c6ea08fd3f1fe5605650cacc781b2c6013169a0ad8f42c7d3d84f32
+          args: ["-c", "log_connections=on", "-c", "log_disconnections=on", "-c", "password_encryption=scram-sha-256"]
+          env:
+            - {name: POSTGRES_DB, value: expense_platform}
+            - {name: POSTGRES_PASSWORD_FILE, value: /var/run/secrets/expense-platform/postgres/password}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          ports:
+            - {name: postgres, containerPort: 5432}
+          readinessProbe:
+            exec: {command: ["pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "expense_platform"]}
+            periodSeconds: 5
+          livenessProbe:
+            exec: {command: ["pg_isready", "-h", "127.0.0.1", "-U", "postgres"]}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: run, mountPath: /var/run/postgresql}
+            - {name: tmp, mountPath: /tmp}
+            - {name: superuser, mountPath: /var/run/secrets/expense-platform/postgres, readOnly: true}
+      volumes:
+        - {name: run, emptyDir: {}}
+        - {name: tmp, emptyDir: {}}
+        - name: superuser
+          secret: {secretName: postgres-superuser, defaultMode: 0440}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: {storage: 1Gi}

@@ -1,0 +1,95 @@
+# Default deny, then one policy per allowed flow. Overlays add the flows that
+# differ per environment: identity provider egress and ingress sources.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny-all}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: allow-dns}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
+          podSelector: {matchLabels: {k8s-app: kube-dns}}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+# PostgreSQL accepts connections only from labelled database clients.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: postgres-ingress}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: postgres}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {expense-platform/db-client: "true"}}
+      ports: [{protocol: TCP, port: 5432}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: db-clients-egress}
+spec:
+  podSelector: {matchLabels: {expense-platform/db-client: "true"}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: postgres}}
+      ports: [{protocol: TCP, port: 5432}]
+---
+# The public APIs accept traffic on their HTTP port; overlays narrow the source
+# where the environment allows it (AWS: the ingress controller only).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: public-api-ingress}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [expenses, audit]}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{protocol: TCP, port: 8080}]
+---
+# Only the expenses outbox worker may deliver events to audit.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: audit-internal-ingress}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: audit}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: expenses}}
+      ports: [{protocol: TCP, port: 8081}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: expenses-to-audit-egress}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: expenses}}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: audit}}
+      ports: [{protocol: TCP, port: 8081}]
+---
+# Metrics are scraped only by Prometheus (optional observability profile).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: metrics-ingress}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [expenses, audit]}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {matchLabels: {app.kubernetes.io/name: prometheus}}
+      ports: [{protocol: TCP, port: 9090}]
