@@ -10,7 +10,7 @@ provisioning, kindnet CNI), Go 1.26.11.
 |---|---|
 | `fmt-check`, `vet` (incl. `integration`, `e2e` tags) | clean, 5 modules |
 | `test` (race detector) | all packages pass |
-| `test-integration` (PostgreSQL 17.12, production roles) | 27 integration and unit tests pass in `expenses`, 9 in `audit` |
+| `test-integration` (PostgreSQL 17.12, production roles) | all unit and integration tests pass (67 test and fuzz functions across the modules, plus table-driven subtests) |
 | `vuln` (govulncheck v1.10.0) | no vulnerabilities in 5 modules. The first run found 20 reachable standard-library issues in Go 1.26.3; fixed by moving to Go 1.26.11 |
 | `sast` (gosec v2.30.0) | 0 issues; 2 reviewed `#nosec` (EX-1, EX-2) and one real fix (integer conversion in the idempotency hash) |
 | `k8s-lint` (kubeconform 0.8.0, strict) + `tests/manifests` | local 32, observability 37, aws 27 resources valid; policy tests pass |
