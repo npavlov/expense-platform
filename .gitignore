@@ -1,0 +1,23 @@
+# Build output
+/bin/
+*.test
+*.out
+
+# Go workspace sums are local
+go.work.sum
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Local secrets
+.env
