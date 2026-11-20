@@ -8,7 +8,7 @@ import (
 )
 
 func TestHealth(t *testing.T) {
-	srv := httptest.NewServer(NewRouter())
+	srv := httptest.NewServer(NewRouter(Deps{}))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/health")
@@ -37,7 +37,7 @@ func TestHealthRejectsOtherMethods(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/health", nil)
 
-	NewRouter().ServeHTTP(rec, req)
+	NewRouter(Deps{}).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
@@ -48,7 +48,7 @@ func TestUnknownRoute(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/nope", nil)
 
-	NewRouter().ServeHTTP(rec, req)
+	NewRouter(Deps{}).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
