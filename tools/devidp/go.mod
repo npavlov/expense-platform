@@ -1,6 +1,6 @@
 module github.com/npavlov/expense-platform/tools/devidp
 
-go 1.26.3
+go 1.26.11
 
 replace github.com/npavlov/expense-platform/libs/platform => ../../libs/platform
 

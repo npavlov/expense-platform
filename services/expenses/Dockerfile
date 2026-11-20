@@ -1,7 +1,7 @@
 # Build context: repository root, e.g.
 #   docker build -f services/expenses/Dockerfile -t expense-platform/expenses .
 # Base images are pinned by digest; Dependabot proposes updates.
-FROM golang:1.26.3-alpine@sha256:91eda9776261207ea25fd06b5b7fed8d397dd2c0a283e77f2ab6e91bfa71079d AS build
+FROM golang:1.26.11-alpine@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOWORK=off GOFLAGS=-trimpath
 # Dependencies first, so code changes do not invalidate the module cache layer.

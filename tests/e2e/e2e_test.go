@@ -162,7 +162,7 @@ func TestAuditOutageRecovery(t *testing.T) {
 			t.Fatalf("kubectl %v: %v\n%s", args, err, out)
 		}
 	}
-	token(t, "rita")
+	reviewer := token(t, "rita")
 	id := mustSubmit(t, "alice", 1999, "Conference ticket")
 
 	kubectl("scale", "deployment/audit", "--replicas=0")
@@ -176,7 +176,7 @@ func TestAuditOutageRecovery(t *testing.T) {
 		t.Fatalf("decision waited %v for the unavailable audit service", time.Since(start))
 	}
 	time.Sleep(5 * time.Second) // let the worker fail a few times
-	if status, _ := tryHistory(id); status == http.StatusOK {
+	if status, _ := tryHistory(reviewer, id); status == http.StatusOK {
 		t.Fatal("history answered while audit was scaled to zero")
 	}
 

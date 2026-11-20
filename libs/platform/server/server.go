@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -96,7 +97,9 @@ func EnvList(key string) []string {
 // environment and of "kubectl describe pod".
 func EnvSecret(key string) (string, error) {
 	if path := os.Getenv(key + "_FILE"); path != "" {
-		b, err := os.ReadFile(path)
+		// The path is deployment configuration set by the operator in the
+		// manifest, never request data. Reviewed exception, see docs/security/exceptions.md.
+		b, err := os.ReadFile(filepath.Clean(path)) // #nosec G304 G703 -- operator-controlled path
 		if err != nil {
 			return "", err
 		}

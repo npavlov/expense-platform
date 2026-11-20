@@ -197,7 +197,7 @@ func Backoff(attempt int, base, maxDelay time.Duration) time.Duration {
 	}
 	d = min(d, maxDelay)
 	half := d / 2
-	return half + rand.N(half+1)
+	return half + rand.N(half+1) // #nosec G404 -- retry jitter, not security-sensitive
 }
 
 // Metrics of the outbox. No label carries an event, claim or user ID.

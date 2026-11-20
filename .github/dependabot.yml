@@ -1,0 +1,23 @@
+# Small, regular updates. Cooldown: new releases are proposed only after a few
+# days, when most malicious or broken releases have been pulled. Security
+# updates are not delayed.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directories: ["/libs/platform", "/services/expenses", "/services/audit", "/tools/devidp", "/tests"]
+    schedule: {interval: weekly}
+    cooldown: {default-days: 7}
+    groups:
+      go-dependencies: {patterns: ["*"]}
+  - package-ecosystem: docker
+    directories: ["/services/expenses", "/services/audit", "/tools/devidp"]
+    schedule: {interval: weekly}
+    cooldown: {default-days: 7}
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: {interval: weekly}
+    cooldown: {default-days: 7}
+  - package-ecosystem: terraform
+    directory: "/infra/terraform/aws"
+    schedule: {interval: weekly}
+    cooldown: {default-days: 7}

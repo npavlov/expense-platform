@@ -156,8 +156,9 @@ func history(t *testing.T, id string) (int, []map[string]any) {
 func waitForHistory(t *testing.T, id string, n int, timeout time.Duration) []map[string]any {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
+	reviewer := token(t, "rita")
 	for {
-		status, entries := tryHistory(id)
+		status, entries := tryHistory(reviewer, id)
 		if status == http.StatusOK && len(entries) >= n {
 			return entries
 		}
@@ -169,11 +170,9 @@ func waitForHistory(t *testing.T, id string, n int, timeout time.Duration) []map
 }
 
 // tryHistory is history without failing the test on transport errors (audit may be down).
-func tryHistory(id string) (int, []map[string]any) {
+func tryHistory(bearer, id string) (int, []map[string]any) {
 	req, _ := http.NewRequest(http.MethodGet, auditURL+"/v1/audit/claims/"+id+"/decisions", nil)
-	tokenMu.Lock()
-	req.Header.Set("Authorization", "Bearer "+tokens["rita"])
-	tokenMu.Unlock()
+	req.Header.Set("Authorization", "Bearer "+bearer)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return 0, nil

@@ -1,0 +1,116 @@
+#cloud-config
+# Versioned bootstrap of the single k3s node. Rendered by Terraform
+# (compute.tf); every value below comes from a Terraform variable.
+package_update: true
+packages: [jq]
+
+write_files:
+  # k3s keeps its whole state on the data volume, under a fixed node name, so a
+  # replacement instance that re-attaches the volume continues the same cluster:
+  # same datastore, secrets (encrypted at rest) and local-path volumes.
+  - path: /etc/rancher/k3s/config.yaml
+    permissions: "0600"
+    content: |
+      data-dir: /var/lib/expense-data/k3s
+      node-name: expense-platform
+      default-local-storage-path: /var/lib/expense-data/storage
+      write-kubeconfig-mode: "0600"
+      secrets-encryption: true
+      disable: [metrics-server]
+      kube-apiserver-arg:
+        - audit-log-path=/var/lib/expense-data/kube-audit/audit.log
+        - audit-policy-file=/etc/rancher/k3s/audit-policy.yaml
+        - audit-log-maxage=30
+        - audit-log-maxbackup=5
+        - audit-log-maxsize=50
+
+  # Kubernetes audit log: who read secrets, exec'd into pods, changed RBAC.
+  - path: /etc/rancher/k3s/audit-policy.yaml
+    permissions: "0600"
+    content: |
+      apiVersion: audit.k8s.io/v1
+      kind: Policy
+      omitStages: [RequestReceived]
+      rules:
+        - level: Metadata
+          resources:
+            - {group: "", resources: [secrets, configmaps]}
+        - level: RequestResponse
+          resources:
+            - {group: "", resources: [pods/exec, pods/attach, pods/portforward]}
+            - {group: rbac.authorization.k8s.io}
+        - level: Metadata
+          verbs: [create, update, patch, delete]
+        - level: None
+
+  # Traefik (bundled with k3s, chart 40.x): Let's Encrypt via HTTP-01 on :80,
+  # everything else on :80 redirected to :443. Certificates persist on the
+  # data volume, so a replacement node does not request new ones.
+  - path: /etc/expense-platform/traefik-config.yaml
+    permissions: "0600"
+    content: |
+      apiVersion: helm.cattle.io/v1
+      kind: HelmChartConfig
+      metadata:
+        name: traefik
+        namespace: kube-system
+      spec:
+        valuesContent: |-
+          ports:
+            web:
+              allowACMEByPass: true
+              http:
+                redirections:
+                  entryPoint: {to: websecure, scheme: https, permanent: true}
+          certificatesResolvers:
+            letsencrypt:
+              acme:
+                email: ${acme_email}
+                caServer: ${acme_server}
+                storage: /data/acme.json
+                httpChallenge:
+                  entryPoint: web
+          persistence:
+            enabled: true
+            size: 128Mi
+          updateStrategy:
+            type: Recreate
+          logs:
+            access:
+              enabled: true
+
+  - path: /usr/local/sbin/expense-platform-bootstrap
+    permissions: "0700"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      exec > >(tee -a /var/log/expense-platform-bootstrap.log) 2>&1
+
+      # 1. Data volume: wait for the attachment, format only if empty, mount.
+      dev=/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${data_volume_id}
+      for _ in $(seq 1 120); do [ -e "$dev" ] && break; sleep 5; done
+      [ -e "$dev" ] || { echo "data volume ${data_volume_id} not attached"; exit 1; }
+      if ! blkid "$dev" >/dev/null 2>&1; then
+        echo "formatting new data volume"
+        mkfs.ext4 -L expense-data "$dev"
+      else
+        echo "reusing existing data volume"
+      fi
+      mkdir -p /var/lib/expense-data
+      uuid=$(blkid -s UUID -o value "$dev")
+      grep -q "$uuid" /etc/fstab || echo "UUID=$uuid /var/lib/expense-data ext4 defaults,nofail,noatime 0 2" >> /etc/fstab
+      mountpoint -q /var/lib/expense-data || mount /var/lib/expense-data
+      mkdir -p /var/lib/expense-data/kube-audit /var/lib/expense-data/k3s/server/manifests
+      chmod 700 /var/lib/expense-data
+      # k3s applies files in this directory at start and on change.
+      install -m 0600 /etc/expense-platform/traefik-config.yaml /var/lib/expense-data/k3s/server/manifests/traefik-config.yaml
+
+      # 2. k3s, from the pinned tag, with the install script checked by hash.
+      curl -fsSL -o /tmp/k3s-install.sh "https://raw.githubusercontent.com/k3s-io/k3s/${replace(k3s_version, "+", "%2B")}/install.sh"
+      echo "${k3s_install_sha256}  /tmp/k3s-install.sh" | sha256sum -c -
+      INSTALL_K3S_VERSION="${k3s_version}" sh /tmp/k3s-install.sh
+
+      echo "k3s ready for ${hostname}"
+
+runcmd:
+  - /usr/local/sbin/expense-platform-bootstrap

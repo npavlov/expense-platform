@@ -5,10 +5,10 @@ package claims
 
 import (
 	"crypto/sha256"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -113,9 +113,9 @@ func (n NewClaim) Validate() error {
 // values, so formatting differences (key order, whitespace) do not matter.
 func (n NewClaim) Hash() [32]byte {
 	h := sha256.New()
-	var buf [8]byte
-	binary.BigEndian.PutUint64(buf[:], uint64(n.AmountCents))
-	h.Write(buf[:])
+	// Decimal amount, then NUL (never part of a valid description), then text.
+	h.Write(strconv.AppendInt(nil, n.AmountCents, 10))
+	h.Write([]byte{0})
 	h.Write([]byte(n.Description))
 	var out [32]byte
 	copy(out[:], h.Sum(nil))

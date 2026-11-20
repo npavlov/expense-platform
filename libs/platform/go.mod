@@ -1,6 +1,6 @@
 module github.com/npavlov/expense-platform/libs/platform
 
-go 1.26.3
+go 1.26.11
 
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0

@@ -1,0 +1,90 @@
+openapi: 3.1.0
+info:
+  title: audit API
+  version: 1.0.0
+  license: {name: MIT, identifier: MIT}
+  description: |
+    Decision history. Two listeners with different trust:
+
+    * **public** (port 8080, behind the ingress): `GET /v1/audit/...`, for
+      users in the `reviewers` group, OIDC access token required;
+    * **internal** (port 8081, cluster-internal, NetworkPolicy admits only
+      expenses pods): `POST /internal/v1/events`, HMAC-signed by the expenses
+      outbox worker. User tokens are not accepted there; signatures are not
+      accepted on the public listener.
+
+    The event body is defined in ../events/expense-decided.v1.schema.json.
+servers:
+  - url: http://127.0.0.1:30081
+    description: local stand, public listener (port-forward)
+  - url: https://{host}
+    description: AWS stand (ingress routes /v1/audit to audit)
+    variables: {host: {default: api.example.invalid}}
+paths:
+  /v1/audit/claims/{id}/decisions:
+    get:
+      operationId: getClaimDecisions
+      summary: "Decision history of a claim (group reviewers)"
+      description: |
+        Empty while the event is still on its way from the outbox (eventual
+        consistency); not 404, because audit cannot tell an undecided claim
+        from one whose event is delayed.
+      security: [{bearer: []}]
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        "200":
+          description: History in decision order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [claim_id, decisions]
+                properties:
+                  claim_id: {type: string, format: uuid}
+                  decisions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        event_id: {type: string, format: uuid}
+                        claim_id: {type: string, format: uuid}
+                        employee_id: {type: string}
+                        amount_cents: {type: integer}
+                        currency: {type: string}
+                        decision: {type: string, enum: [approved, rejected]}
+                        decided_by: {type: string}
+                        decided_at: {type: string, format: date-time}
+                        recorded_at: {type: string, format: date-time}
+                        correlation_id: {type: string}
+        "401": {description: "Missing or invalid token"}
+        "403": {description: "Not a reviewer"}
+  /internal/v1/events:
+    post:
+      operationId: ingestEvent
+      summary: "Ingest an ExpenseDecided event (internal listener only)"
+      servers:
+        - url: http://audit-internal:8081
+          description: cluster-internal only
+      security: [{hmac: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "../events/expense-decided.v1.schema.json"}
+      responses:
+        "201": {description: "Recorded"}
+        "200": {description: "Duplicate of a recorded event (safe redelivery)"}
+        "401": {description: "Missing or invalid signature"}
+        "409": {description: "Same event_id, different content"}
+        "413": {description: "Larger than 64 KiB"}
+        "422": {description: "Invalid event or unsupported schema_version"}
+        "503": {description: "Database unavailable; the sender retries"}
+components:
+  securitySchemes:
+    bearer: {type: http, scheme: bearer, bearerFormat: JWT}
+    hmac:
+      type: apiKey
+      in: header
+      name: X-Expense-Signature
+      description: "t=<unix>,kid=<key id>,v1=<hex HMAC-SHA256(key, t + '.' + raw body)>; ±5 min window"

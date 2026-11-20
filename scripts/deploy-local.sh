@@ -2,10 +2,15 @@
 # Builds the images and deploys the local stand to Docker Desktop Kubernetes,
 # namespace expense-platform-local. Safe to re-run: data and secrets persist.
 #
-#   OBSERVABILITY=1  also deploy Prometheus with alert rules (localhost:30090)
+#   OBSERVABILITY=1    also deploy Prometheus with alert rules (127.0.0.1:30090)
+#   KIND_CLUSTER=name  target a kind cluster instead (used by CI): context
+#                      kind-<name>, images loaded with "kind load"
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
+KIND="go run sigs.k8s.io/kind@v0.33.0"
 CTX=docker-desktop
+[[ -n "${KIND_CLUSTER:-}" ]] && CTX="kind-$KIND_CLUSTER"
+export KUBE_CONTEXT="$CTX"
 NS=expense-platform-local
 source "$root/scripts/lib.sh"
 guard_target "$CTX" "$NS"
@@ -20,6 +25,9 @@ for spec in expenses:services/expenses audit:services/audit devidp:tools/devidp;
   docker tag "expense-platform/$name:build" "expense-platform/$name:dev-$id"
   tags+=("$name=dev-$id")
   echo "expense-platform/$name:dev-$id"
+  if [[ -n "${KIND_CLUSTER:-}" ]]; then
+    $KIND load docker-image --name "$KIND_CLUSTER" "expense-platform/$name:dev-$id" >/dev/null
+  fi
 done
 
 step "Namespace and secrets"

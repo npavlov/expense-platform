@@ -1,0 +1,226 @@
+openapi: 3.1.0
+info:
+  title: expenses API
+  version: 1.0.0
+  license: {name: MIT, identifier: MIT}
+  description: |
+    Submit expense claims and decide them. Every `/v1` route requires an OIDC
+    access token (Cognito, or the local dev issuer) in `Authorization: Bearer`.
+    Groups come from the token's `cognito:groups` claim. The caller's identity
+    is the token `sub`; request bodies never carry identities.
+
+    Errors use RFC 9457 problem details; codes are listed in errors.md.
+servers:
+  - url: http://127.0.0.1:30080
+    description: local stand (port-forward)
+  - url: https://{host}
+    description: AWS stand
+    variables: {host: {default: api.example.invalid}}
+security:
+  - bearer: []
+paths:
+  /health:
+    get:
+      operationId: health
+      summary: "Liveness (process is up)"
+      security: []
+      responses:
+        "200": {description: "OK"}
+  /ready:
+    get:
+      operationId: ready
+      summary: "Readiness (database reachable, schema migrated)"
+      security: []
+      responses:
+        "200": {description: "Ready"}
+        "503": {$ref: "#/components/responses/Problem"}
+  /v1/claims:
+    post:
+      operationId: submitClaim
+      summary: "Submit a claim (group employees)"
+      description: |
+        Idempotent per employee and `Idempotency-Key`:
+
+        * same key, same body: the original claim is returned (`201`,
+          `Idempotent-Replayed: true`), including while the first request is
+          still in flight (the retry waits for it);
+        * same key, different body: `422 idempotency_key_reused`;
+        * the key is scoped to the caller: another employee may use the same key.
+
+        "Same body" compares the parsed `amount_cents` and `description`, not
+        the raw bytes. Keys are retained as long as the claim.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/NewClaim"}
+            example: {amount_cents: 1200, description: Taxi}
+      responses:
+        "201":
+          description: Created (or replayed)
+          headers:
+            Location: {schema: {type: string}, description: "/v1/claims/{id}"}
+            Idempotent-Replayed: {schema: {type: string, enum: ["true"]}}
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Claim"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "413": {$ref: "#/components/responses/Problem"}
+        "415": {$ref: "#/components/responses/Problem"}
+        "422": {$ref: "#/components/responses/Problem"}
+    get:
+      operationId: listOwnClaims
+      summary: "List the caller's own claims, newest first (group employees)"
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Own claims only
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ClaimList"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+  /v1/claims/{id}:
+    get:
+      operationId: getClaim
+      summary: "Read one claim (employees: own claims only; reviewers: any)"
+      description: Another employee's claim answers 404, exactly like a missing one.
+      parameters:
+        - $ref: "#/components/parameters/ClaimID"
+      responses:
+        "200":
+          description: The claim
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Claim"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+  /v1/review/claims:
+    get:
+      operationId: listReviewQueue
+      summary: "Pending claims to decide, oldest first, excluding the reviewer's own (group reviewers)"
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Review queue
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ClaimList"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+  /v1/claims/{id}/decision:
+    post:
+      operationId: decideClaim
+      summary: "Approve or reject a pending claim (group reviewers)"
+      description: |
+        Decided once. Concurrent decisions are serialized on the claim row;
+        exactly one wins. The same reviewer repeating the same decision gets
+        `200` with `Idempotent-Replayed: true` (safe retry after a timeout);
+        any other second decision is `409 already_decided`. Deciding one's own
+        claim is `403 self_decision_forbidden`.
+
+        The decision and its `ExpenseDecided` event are committed in one
+        transaction; the event reaches the audit history asynchronously.
+      parameters:
+        - $ref: "#/components/parameters/ClaimID"
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision: {type: string, enum: [approved, rejected]}
+      responses:
+        "200":
+          description: Decided (or replayed)
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Claim"}
+        "400": {$ref: "#/components/responses/Problem"}
+        "401": {$ref: "#/components/responses/Problem"}
+        "403": {$ref: "#/components/responses/Problem"}
+        "404": {$ref: "#/components/responses/Problem"}
+        "409": {$ref: "#/components/responses/Problem"}
+        "422": {$ref: "#/components/responses/Problem"}
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT (access token, token_use=access)
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, pattern: "^[A-Za-z0-9._:-]{8,128}$"}
+      description: Unique per claim the client intends to submit; reuse it for every retry.
+    RequestID:
+      name: X-Request-ID
+      in: header
+      schema: {type: string, pattern: "^[A-Za-z0-9._-]{1,64}$"}
+      description: Optional correlation ID; generated if absent and returned in the response.
+    ClaimID:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+  responses:
+    Problem:
+      description: Error (see errors.md)
+      content:
+        application/problem+json:
+          schema: {$ref: "#/components/schemas/Problem"}
+  schemas:
+    NewClaim:
+      type: object
+      additionalProperties: false
+      required: [amount_cents, description]
+      properties:
+        amount_cents: {type: integer, minimum: 1, maximum: 10000000, description: Euro cents}
+        description: {type: string, minLength: 1, maxLength: 500, description: "Not blank; no control characters"}
+    Claim:
+      type: object
+      required: [id, employee_id, amount_cents, currency, description, status, created_at, decided_by, decided_at]
+      properties:
+        id: {type: string, format: uuid}
+        employee_id: {type: string, description: Token subject of the owner}
+        amount_cents: {type: integer}
+        currency: {type: string, enum: [EUR]}
+        description: {type: string}
+        status: {type: string, enum: [pending, approved, rejected]}
+        created_at: {type: string, format: date-time}
+        decided_by: {type: [string, "null"]}
+        decided_at: {type: [string, "null"], format: date-time}
+    ClaimList:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: "#/components/schemas/Claim"}}
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        code: {type: string}
+        detail: {type: string}
+        request_id: {type: string}

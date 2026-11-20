@@ -1,0 +1,11 @@
+# Security-critical areas require the owner's review (enable "Require review
+# from Code Owners" in branch protection). One owner today; the file still
+# documents where the sensitive code lives.
+*                                   @npavlov
+/libs/platform/authn/               @npavlov
+/libs/platform/sigauth/             @npavlov
+/services/*/migrations/             @npavlov
+/deploy/                            @npavlov
+/infra/                             @npavlov
+/.github/                           @npavlov
+/scripts/secrets.sh                 @npavlov

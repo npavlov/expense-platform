@@ -1,0 +1,23 @@
+# Reviewed exceptions for `trivy config`. Each entry names the risk, the
+# compensating controls and an expiry date; see docs/security/exceptions.md.
+misconfigurations:
+  - id: AVD-AWS-0104
+    paths:
+      - "network.tf" # relative to the scanned directory (infra/terraform/aws)
+    statement: >-
+      Node egress is TCP 443/80 to any address: GHCR, Let's Encrypt, Cognito
+      JWKS, SSM and Ubuntu mirrors have no fixed IP ranges, and VPC endpoints
+      (about 7 USD/month each) would dominate the stand's cost. Compensating:
+      no other ports, pods limited to public 443 by NetworkPolicy, IMDS hop
+      limit 1, no credentials on the instance besides Session Manager.
+    expired_at: 2027-05-31
+  - id: AVD-KSV-0109
+    paths:
+      - "local.yaml" # rendered overlays under .local/scan/k8s
+      - "local-observability.yaml"
+      - "aws.yaml"
+    statement: >-
+      False positive: the db-bootstrap-sql ConfigMap holds bootstrap.sql, whose
+      PASSWORD clauses are psql variable placeholders (:'expenses_app_password').
+      The values come from the db-role-passwords Secret at run time.
+    expired_at: 2027-05-31
