@@ -1,61 +1,61 @@
 # expense-platform
 
-Учебный сервис согласования расходов. Сотрудник подаёт заявку («12 евро за такси»), ревьюер одобряет или отклоняет её, а история решений хранится в отдельном сервисе.
+A learning project: an expense approval service. An employee submits a claim ("12 EUR for a taxi"), a reviewer approves or rejects it, and the decision history is kept in a separate service.
 
-## Архитектура
+## Architecture
 
 ```text
-Сотрудник или ревьюер
+Employee or reviewer
         │
-        │ HTTPS + токен пользователя
+        │ HTTPS + user token
         ▼
-    expenses ──────► PostgreSQL · схема expenses
-                        заявки, решения, события к отправке
+    expenses ──────► PostgreSQL · schema expenses
+                        claims, decisions, events to deliver
                                   │
-                     обработчик доставки в составе expenses
-                                  │ HTTP по внутренней сети Kubernetes
+                     delivery worker inside expenses
+                                  │ HTTP over the Kubernetes internal network
                                   ▼
-                      audit ───► PostgreSQL · схема audit
-                                    история решений
+                      audit ───► PostgreSQL · schema audit
+                                    decision history
 ```
 
-- **expenses** — подать заявку, посмотреть свою заявку, принять решение. Решение и событие `ExpenseDecided` пишутся в одной транзакции (transactional outbox), фоновый обработчик доставляет событие в `audit`.
-- **audit** — принимает события и хранит историю решений. Уникальный ID события защищает от двойной записи при повторной доставке.
+- **expenses** — submit a claim, view your own claim, decide on a claim. The decision and the `ExpenseDecided` event are written in one transaction (transactional outbox); a background worker delivers the event to `audit`.
+- **audit** — receives events and stores the decision history. A unique event ID protects against duplicate records on redelivery.
 
-## Структура репозитория
+## Repository layout
 
 ```text
 expense-platform/
-├── go.work                    # объединяет Go-модули для локальной разработки
+├── go.work                    # joins Go modules for local development
 ├── services/
 │   ├── expenses/              # go.mod, cmd/, internal/, migrations/, Dockerfile
-│   └── audit/                 # (шаг 2)
-├── contracts/                 # HTTP API и формат события ExpenseDecided (шаг 2)
-├── deploy/k8s/                # base/ и overlays/local, overlays/aws
-├── infra/terraform/aws/       # облачный стенд и cloud-init для k3s (шаг 4)
-├── tests/e2e/                 # сквозные тесты на Go
-└── .github/workflows/         # проверки pull request
+│   └── audit/                 # (step 2)
+├── contracts/                 # HTTP API and ExpenseDecided event format (step 2)
+├── deploy/k8s/                # base/ plus overlays/local and overlays/aws
+├── infra/terraform/aws/       # cloud environment and cloud-init for k3s (step 4)
+├── tests/e2e/                 # end-to-end tests in Go
+└── .github/workflows/         # pull request checks
 ```
 
-Каждый сервис — отдельный Go-модуль, отдельный бинарник и отдельный контейнер.
+Each service is a separate Go module, binary and container image.
 
-## Быстрый старт
+## Quick start
 
-Нужен Go 1.26+.
+Requires Go 1.26+.
 
 ```bash
-make test           # тесты всех сервисов
-make run-expenses   # запустить expenses на :8080 (адрес меняется через HTTP_ADDR)
+make test           # run tests for all services
+make run-expenses   # start expenses on :8080 (override with HTTP_ADDR)
 
 curl -s localhost:8080/health
 # {"status":"ok"}
 ```
 
-## План
+## Roadmap
 
-1. **Первый результат:** `expenses` записывает заявку в PostgreSQL и отдаёт её обратно. Первая миграция и интеграционный тест.
-   - [x] Go-модуль `services/expenses`, `GET /health`, тест через `httptest`, CI
-   - [ ] PostgreSQL, первая миграция, `POST /expenses` и `GET /expenses/{id}`
-2. **Второй сервис:** решение ревьюера, `outbox`, `audit`. Повторная доставка и восстановление после сбоя.
-3. **Безопасность и наблюдаемость:** вход пользователей (Cognito), проверка прав, метрики (в том числе возраст самого старого неотправленного события), сквозные логи.
-4. **Публикация:** оценка стоимости, развёртывание в AWS через Terraform (k3s на EC2), демо, восстановление базы из копии, `terraform destroy`.
+1. **First working result:** `expenses` stores a claim in PostgreSQL and returns it. First migration and integration test.
+   - [x] `services/expenses` Go module, `GET /health`, `httptest` tests, CI
+   - [ ] PostgreSQL, first migration, `POST /expenses` and `GET /expenses/{id}`
+2. **Second service:** reviewer decisions, `outbox`, `audit`. Redelivery and recovery after an outage.
+3. **Security and observability:** user sign-in (Cognito), authorization checks, metrics (including the age of the oldest undelivered event), tracing a decision through logs.
+4. **Publishing:** cost estimate, AWS deployment with Terraform (k3s on EC2), demo, database restore from backup, `terraform destroy`.
