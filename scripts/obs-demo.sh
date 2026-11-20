@@ -41,6 +41,7 @@ done
 step "Start audit; the backlog drains and the alert resolves"
 k scale deployment/audit --replicas=1 >/dev/null
 k rollout status deployment/audit --timeout=120s >/dev/null
+"$root/scripts/port-forward.sh" start >/dev/null
 while [[ "$(alert_state)" != inactive ]]; do
   sleep 5; printf '  oldest undelivered age=%ss  alert=%s\n' "$(age)" "$(alert_state)"
 done

@@ -13,7 +13,7 @@
 # expenses-app-db        expenses                        DATABASE_URL (DML role)
 # audit-migrator-db      audit-migrate job               DATABASE_URL (DDL role)
 # audit-app-db           audit                           DATABASE_URL (DML role)
-# outbox-signing-key     expenses                        HMAC key the worker signs with
+# outbox-signing-key     expenses                        HMAC key the worker signs with (id, key)
 # audit-ingest-keys      audit                           accepted HMAC keys (kid:key,...)
 set -euo pipefail
 CTX="$1"; NS="$2"
@@ -58,14 +58,14 @@ for r in $roles; do
 done
 
 if ! exists outbox-signing-key; then
-  rand > "$tmp/key"
-  apply_secret outbox-signing-key "key=$tmp/key"
+  rand > "$tmp/key"; printf k1 > "$tmp/id"
+  apply_secret outbox-signing-key "id=$tmp/id" "key=$tmp/key"
   echo "created outbox-signing-key"
 fi
 # During a rotation, audit-ingest-keys holds old and new keys
 # (docs/operations.md#rotate-the-event-signing-key); by default it trusts k1.
 if ! exists audit-ingest-keys; then
-  printf 'k1:%s' "$(get outbox-signing-key key)" > "$tmp/keys"
+  printf '%s:%s' "$(get outbox-signing-key id 2>/dev/null || echo k1)" "$(get outbox-signing-key key)" > "$tmp/keys"
   apply_secret audit-ingest-keys "keys=$tmp/keys"
   echo "created audit-ingest-keys"
 fi

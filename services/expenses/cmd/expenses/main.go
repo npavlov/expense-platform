@@ -116,7 +116,13 @@ func newWorker(store outbox.Store, m *outbox.Metrics, logger *slog.Logger) (*out
 	if len(key) < 32 {
 		return nil, errors.New("AUDIT_SIGNING_KEY must be at least 32 bytes")
 	}
-	signer := sigauth.Signer{KeyID: server.Env("AUDIT_SIGNING_KEY_ID", "k1"), Key: []byte(key)}
+	// The key ID lives in the same secret as the key, so a rotation changes
+	// both together; secrets created before the ID existed default to k1.
+	keyID, err := server.EnvSecret("AUDIT_SIGNING_KEY_ID")
+	if err != nil || keyID == "" {
+		keyID = "k1"
+	}
+	signer := sigauth.Signer{KeyID: keyID, Key: []byte(key)}
 
 	cfg := outbox.DefaultConfig()
 	for name, dst := range map[string]*time.Duration{

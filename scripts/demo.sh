@@ -64,6 +64,8 @@ say "5. Audit comes back; the history catches up with the decision"
 run "kubectl scale deployment/audit --replicas=1"
 k scale deployment/audit --replicas=1 >/dev/null
 k rollout status deployment/audit --timeout=120s >/dev/null
+# kubectl port-forward can keep pointing at the deleted pod; reconnect.
+"$root/scripts/port-forward.sh" start >/dev/null
 t0=$(date +%s); wait_history "$ID2"
 history "$ID2" | jq -c '{entries: (.decisions | length), decision: .decisions[0].decision}'
 echo "caught up $(( $(date +%s) - t0 ))s after audit became ready"

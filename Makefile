@@ -21,7 +21,7 @@ TF_DIR := infra/terraform/aws
 
 .DEFAULT_GOAL := help
 .PHONY: help test vet fmt fmt-check test-integration fuzz vuln sast k8s-lint \
-        local-up local-status local-stop local-start local-destroy port-forward port-forward-stop \
+        local-up local-status local-stop local-start local-destroy clean-images port-forward port-forward-stop \
         e2e demo obs-demo verify-cluster backup restore-check outbox-status trace \
         tf-fmt tf-validate tf-lint tf-scan api-lint gha-lint secrets-scan image-scan check
 
@@ -83,6 +83,9 @@ local-start: ## Start a stopped stand again (no rebuild)
 local-destroy: ## DELETE the stand with its database (requires CONFIRM=delete-local-data)
 	./scripts/port-forward.sh stop
 	./scripts/destroy-local.sh
+
+clean-images: ## Remove all locally built expense-platform images
+	@docker images 'expense-platform/*' -q | sort -u | xargs docker rmi -f 2>/dev/null || true
 
 port-forward: ## Forward the APIs to 127.0.0.1:30080-30082 (+30090 Prometheus)
 	./scripts/port-forward.sh start
