@@ -1,0 +1,17 @@
+{
+  "event_id": "019a9f3c-7d2e-7c41-9a55-3f1d2b8e4c11",
+  "event_type": "ExpenseDecided",
+  "schema_version": 1,
+  "occurred_at": "2026-11-20T09:31:00Z",
+  "producer": "expenses@1.4.0",
+  "data": {
+    "claim_id": "019a9f3a-1111-7aaa-8bbb-123456789abd",
+    "employee_id": "a11ce000-0000-4000-8000-000000000001",
+    "amount_cents": 4550,
+    "currency": "EUR",
+    "decision": "rejected",
+    "decided_by": "4174a000-0000-4000-8000-000000000003",
+    "decided_at": "2026-11-20T09:31:00Z",
+    "comment": "Receipt missing"
+  }
+}

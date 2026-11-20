@@ -1,0 +1,16 @@
+{
+  "event_id": "019a9f3c-7d2e-7c41-9a55-3f1d2b8e4c10",
+  "event_type": "ExpenseDecided",
+  "schema_version": 1,
+  "occurred_at": "2026-11-20T09:30:00Z",
+  "correlation_id": "0f6c1d0e-5b7a-4c2e-9a1f-1a2b3c4d5e6f",
+  "data": {
+    "claim_id": "019a9f3a-1111-7aaa-8bbb-123456789abc",
+    "employee_id": "a11ce000-0000-4000-8000-000000000001",
+    "amount_cents": 1200,
+    "currency": "EUR",
+    "decision": "approved",
+    "decided_by": "4174a000-0000-4000-8000-000000000003",
+    "decided_at": "2026-11-20T09:30:00Z"
+  }
+}

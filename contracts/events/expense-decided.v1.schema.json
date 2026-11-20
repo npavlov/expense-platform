@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/npavlov/expense-platform/contracts/events/expense-decided.v1.schema.json",
+  "title": "ExpenseDecided v1",
+  "description": "Emitted by expenses when a reviewer approves or rejects a claim. Delivered at least once to audit; event_id is stable across redeliveries. Consumers must ignore unknown fields.",
+  "type": "object",
+  "required": ["event_id", "event_type", "schema_version", "occurred_at", "data"],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid", "description": "Unique per event, identical on every redelivery. Consumers deduplicate by it." },
+    "event_type": { "const": "ExpenseDecided" },
+    "schema_version": { "const": 1, "description": "Major version. Breaking changes increment it." },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "correlation_id": { "type": "string", "maxLength": 64, "description": "X-Request-ID of the API call that made the decision." },
+    "data": {
+      "type": "object",
+      "required": ["claim_id", "employee_id", "amount_cents", "currency", "decision", "decided_by", "decided_at"],
+      "properties": {
+        "claim_id": { "type": "string", "format": "uuid" },
+        "employee_id": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Subject (sub) of the claim owner." },
+        "amount_cents": { "type": "integer", "minimum": 1, "maximum": 10000000, "description": "Exact amount that was decided, in minor units." },
+        "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+        "decision": { "enum": ["approved", "rejected"] },
+        "decided_by": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Subject (sub) of the reviewer; never equal to employee_id." },
+        "decided_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
