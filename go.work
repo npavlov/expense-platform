@@ -4,5 +4,6 @@ use (
 	./libs/platform
 	./services/audit
 	./services/expenses
+	./tests
 	./tools/devidp
 )

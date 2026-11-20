@@ -31,7 +31,6 @@ spec:
             - --config.file=/etc/prometheus/prometheus.yml
             - --storage.tsdb.path=/prometheus
             - --storage.tsdb.retention.time=2d
-            - --web.enable-lifecycle=false
           ports:
             - {name: http, containerPort: 9090}
           readinessProbe:
