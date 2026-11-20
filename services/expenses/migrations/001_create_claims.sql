@@ -1,6 +1,7 @@
 -- Expense claims submitted by employees.
 -- All amounts are in EUR for now, stored as integer cents to avoid rounding errors.
 
+-- +goose Up
 CREATE SCHEMA IF NOT EXISTS expenses;
 
 CREATE TABLE expenses.claims (
@@ -19,3 +20,7 @@ CREATE TABLE expenses.claims (
     CONSTRAINT claims_amount_positive       CHECK (amount_cents > 0),
     CONSTRAINT claims_status_valid          CHECK (status IN ('pending', 'approved', 'rejected'))
 );
+
+-- +goose Down
+DROP TABLE expenses.claims;
+DROP SCHEMA expenses;

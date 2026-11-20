@@ -41,11 +41,12 @@ Each service is a separate Go module, binary and container image.
 
 ## Quick start
 
-Requires Go 1.26+.
+Requires Go 1.26+ and Docker (for integration tests).
 
 ```bash
-make test           # run tests for all services
-make run-expenses   # start expenses on :8080 (override with HTTP_ADDR)
+make test             # unit tests for all services
+make test-integration # throwaway PostgreSQL + goose migrations + tests tagged "integration"
+make run-expenses     # start expenses on :8080 (override with HTTP_ADDR)
 
 curl -s localhost:8080/health
 # {"status":"ok"}
@@ -55,7 +56,8 @@ curl -s localhost:8080/health
 
 1. **First working result:** `expenses` stores a claim in PostgreSQL and returns it. First migration and integration test.
    - [x] `services/expenses` Go module, `GET /health`, `httptest` tests, CI
-   - [ ] PostgreSQL, first migration, `POST /expenses` and `GET /expenses/{id}`
+   - [x] First goose migration (`expenses.claims`), `cmd/migrate`, integration test for database rules
+   - [ ] `POST /expenses` and `GET /expenses/{id}` backed by PostgreSQL
 2. **Second service:** reviewer decisions, `outbox`, `audit`. Redelivery and recovery after an outage.
 3. **Security and observability:** user sign-in (Cognito), authorization checks, metrics (including the age of the oldest undelivered event), tracing a decision through logs.
 4. **Publishing:** cost estimate, AWS deployment with Terraform (k3s on EC2), demo, database restore from backup, `terraform destroy`.
