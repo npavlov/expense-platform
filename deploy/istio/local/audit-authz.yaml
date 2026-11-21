@@ -1,0 +1,18 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: audit-8081-expenses-only
+  namespace: expense-platform-local
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: audit
+  action: DENY
+  rules:
+    - from:
+        - source:
+            notPrincipals:
+              - cluster.local/ns/expense-platform-local/sa/expenses
+      to:
+        - operation:
+            ports: ["8081"]
