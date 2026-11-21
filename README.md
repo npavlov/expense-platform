@@ -49,7 +49,7 @@ contracts: [contracts/](contracts/).
 ## Quick start (local)
 
 Requirements: macOS or Linux with **Docker Desktop and its Kubernetes
-enabled**, Go 1.26+, kubectl, jq, curl, openssl. Everything else (Terraform,
+enabled**, Go 1.26+ (the `go` command downloads the pinned 1.27.4 toolchain itself), kubectl, jq, curl, openssl. Everything else (Terraform,
 scanners) runs from pinned container images or pinned `go run` versions.
 
 ```bash

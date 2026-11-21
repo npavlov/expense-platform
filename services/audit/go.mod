@@ -1,6 +1,6 @@
 module github.com/npavlov/expense-platform/services/audit
 
-go 1.26.11
+go 1.27.4
 
 replace github.com/npavlov/expense-platform/libs/platform => ../../libs/platform
 
