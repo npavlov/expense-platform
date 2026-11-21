@@ -128,8 +128,8 @@ tf-validate: ## terraform init (no backend) and validate; refreshes the provider
 	  terraform providers lock -platform=linux_amd64 -platform=linux_arm64 -platform=darwin_arm64 >/dev/null && \
 	  terraform validate'
 
-tf-lint: ## tflint with the AWS ruleset
-	docker run --rm -v $(CURDIR)/$(TF_DIR):/data -w /data --entrypoint sh $(TFLINT) -c 'tflint --init >/dev/null && tflint --format compact'
+tf-lint: ## tflint with the AWS ruleset (GITHUB_TOKEN, if set, avoids GitHub API rate limits on plugin download)
+	docker run --rm -e GITHUB_TOKEN -v $(CURDIR)/$(TF_DIR):/data -w /data --entrypoint sh $(TFLINT) -c 'tflint --init >/dev/null && tflint --format compact'
 
 tf-scan: ## Misconfiguration scan of Terraform and the rendered Kubernetes overlays (trivy)
 	@mkdir -p .local/scan/k8s

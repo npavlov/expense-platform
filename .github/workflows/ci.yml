@@ -71,6 +71,9 @@ jobs:
       - name: Provider lock file is committed and current
         run: git diff --exit-code -- infra/terraform/aws/.terraform.lock.hcl
       - run: make tf-lint
+        env:
+          # read-only token: plugin download from GitHub without anonymous rate limits
+          GITHUB_TOKEN: ${{ github.token }}
       - run: make tf-scan
 
   secrets:
