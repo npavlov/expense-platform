@@ -153,7 +153,7 @@ func TestAuditOutageRecovery(t *testing.T) {
 	if os.Getenv("E2E_DISRUPTIVE") != "1" {
 		t.Skip("set E2E_DISRUPTIVE=1 to stop and start the audit deployment")
 	}
-	ctx := env("E2E_KUBE_CONTEXT", "docker-desktop")
+	ctx := env("E2E_KUBE_CONTEXT", env("KUBE_CONTEXT", "docker-desktop"))
 	ns := env("E2E_NAMESPACE", "expense-platform-local")
 	kubectl := func(args ...string) {
 		t.Helper()
