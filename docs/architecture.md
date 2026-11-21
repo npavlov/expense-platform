@@ -66,6 +66,29 @@ Port 8081 has no ingress route and no host port; port 8080 does not serve
 `/internal/...`. Tests check both (`TestHistoryAccess`,
 `TestInternalIngestNotOnPublicPort`, `tests/manifests`).
 
+### Service mesh on the local stand
+
+Locally, `scripts/deploy-local.sh` installs Istio (pinned version in
+`scripts/istio-version.sh`, minimal profile with the Istio CNI plugin, so pods
+need no privileged init container and stay Pod Security `restricted`) and
+adds the istio-proxy sidecar to the `expenses` and `audit` pods only
+(`sidecar.istio.io/inject` label in the local overlay). Three policies in
+`deploy/istio/local/` then add a second, identity-based layer to the delivery
+path:
+
+| Policy | Effect |
+|---|---|
+| `allow-istiod.yaml` (NetworkPolicy) | the proxies may reach istiod on TCP 15012 to get their workload certificates; default-deny blocks everything else |
+| `audit-mtls.yaml` (PeerAuthentication) | port 8081 of the audit pods is STRICT: a connection without mesh mTLS is reset |
+| `audit-authz.yaml` (AuthorizationPolicy, DENY) | requests to 8081 whose mTLS identity is not `spiffe://cluster.local/ns/expense-platform-local/sa/expenses` get 403 |
+
+The HMAC signature stays: it protects the event content end to end and is
+the only service authentication on the AWS stand, which runs without a mesh.
+Ports 8080 and 9090 keep the mesh default (permissive), so probes,
+port-forwards and Prometheus are unchanged. `make verify-cluster` checks all
+three outcomes (plaintext reset, other identity 403, expenses identity
+reaches the app).
+
 ## Consistency model
 
 | Operation | Guarantee | Mechanism |

@@ -78,3 +78,22 @@ is that check and runs in CI.
 | `terraform plan/apply/destroy`, anything in AWS | AWS actions are left to the owner; see [aws.md](aws.md#verified-locally-vs-needs-aws) for what only AWS can confirm |
 | `scripts/aws/*.sh` | they need the AWS stand; syntax checked with `bash -n` only |
 | Restoring a dump into the live stand | procedure documented in [operations.md](operations.md#backup-and-restore); the drill restores into a separate database |
+
+## Service mesh (2026-11-21)
+
+Istio 1.32.0 (minimal profile, Istio CNI) added to the local stand;
+`deploy-local.sh` installs it and applies `deploy/istio/local/*`.
+
+| Step | Docker Desktop | Fresh kind cluster (Kubernetes 1.37, deleted afterwards) |
+|---|---|---|
+| `make local-up` from an empty cluster, including Istio | — (Istio was installed by hand earlier) | 54 s; sidecars only on expenses and audit; setup Jobs completed |
+| second `make local-up` over the running Istio | — | 17 s, no changes needed |
+| `verify-cluster` (now 20 checks) | network checks unreliable again: kindnet logged `failed to set verdict … i/o timeout` (see the finding above), meshed probes timed out | **20/20**, also after the load below |
+| mesh checks on audit:8081 | — | plaintext without sidecar: reset; mTLS as another ServiceAccount: 403; mTLS as expenses: 405 from the app |
+| e2e | — | 8 tests pass; outage recovery 13 s |
+| demo | — | history caught up 2 s after audit returned |
+| backup + restore drill | — | pass, 2 s |
+
+Before the scripted checks existed, the policies were applied by hand on
+Docker Desktop and an approval was delivered under STRICT mTLS with nothing
+left in the outbox.

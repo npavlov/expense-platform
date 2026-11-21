@@ -22,7 +22,7 @@ once `scripts/aws/kubeconfig.sh` has run and the tunnel is open.
 |---|---|---|
 | `make local-stop` | port-forwards stopped, every Deployment and PostgreSQL scaled to 0 | kept (volume, secrets) |
 | `make local-start` | PostgreSQL, then services back to 1 replica, port-forwards, status | as before |
-| `make local-up` | rebuild images, re-run setup jobs (idempotent), roll out | kept |
+| `make local-up` | rebuild images, install or update Istio (`istioctl install`, idempotent), apply mesh policies, re-run setup jobs (idempotent), roll out | kept |
 | `make local-destroy CONFIRM=delete-local-data` | **deletes the namespace with the PostgreSQL volume and all secrets** | gone (take `make backup` first) |
 
 Quitting Docker Desktop also stops the stand; after it starts again, pods come
@@ -43,10 +43,17 @@ After `make local-stop` the following still exists; after
 | Generated state: rendered kustomizations, port-forward logs, scan output | `.local/` (git-ignored) | `rm -rf .local` |
 | Database dumps | `backups/` (git-ignored, mode 600) | delete when no longer needed |
 | Terraform provider cache | `infra/terraform/aws/.terraform/` (git-ignored) | `rm -rf infra/terraform/aws/.terraform` |
+| **Istio, cluster-wide:** namespace `istio-system` (istiod, `istio-cni-node` DaemonSet on every node), Istio CRDs, the sidecar-injection webhook | Docker Desktop Kubernetes | `.local/bin/istioctl uninstall --purge -y --context docker-desktop` (not done by `local-destroy`) |
+| Pinned istioctl (`make istioctl`) | `.local/bin/istioctl` | `rm -rf .local` |
 
-Nothing is installed system-wide and no launch agent is created. The older
-`expenses-lab` namespace is never read or modified by any script: every
-script passes `--context` and `-n` explicitly and refuses other namespaces.
+Nothing is installed on the Mac outside the repository and caches, and no
+launch agent is created. Application resources live only in
+`expense-platform-local`: every script passes `--context` and `-n`
+explicitly and refuses other namespaces. **Exception:** `make local-up`
+installs Istio, which is cluster-scoped. It injects sidecars only into pods
+labelled `sidecar.istio.io/inject: "true"` (expenses and audit), but its CRDs,
+webhook and CNI plugin are shared by every namespace on the cluster,
+including unrelated ones.
 
 ## Alerts and runbooks
 

@@ -34,6 +34,24 @@ step "Namespace and secrets"
 kubectl --context "$CTX" apply -f "$root/deploy/k8s/overlays/local/namespace.yaml" >/dev/null
 "$root/scripts/secrets.sh" "$CTX" "$NS"
 
+step "Install local Istio with CNI"
+istio_dir="$root/deploy/istio/local"
+source "$root/scripts/istio-version.sh"
+ISTIOCTL="$(resolve_istioctl "$root")"
+
+"$ISTIOCTL" install --context "$CTX" -f "$istio_dir/install.yaml" -y
+
+kubectl --context "$CTX" -n istio-system \
+  rollout status daemonset/istio-cni-node --timeout=5m
+kubectl --context "$CTX" -n istio-system \
+  rollout status deployment/istiod --timeout=5m
+
+step "Apply local mesh policies"
+kubectl --context "$CTX" -n "$NS" apply \
+  -f "$istio_dir/allow-istiod.yaml" \
+  -f "$istio_dir/audit-mtls.yaml" \
+  -f "$istio_dir/audit-authz.yaml"
+
 step "Render manifests"
 overlay=local
 [[ "${OBSERVABILITY:-}" == 1 ]] && overlay=local-observability

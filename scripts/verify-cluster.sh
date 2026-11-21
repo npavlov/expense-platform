@@ -2,6 +2,8 @@
 # Verifies cluster-side controls of the running stand:
 #   1. Pod Security Admission rejects pods that are not "restricted"
 #   2. NetworkPolicies are enforced (the CNI actually implements them)
+#   3. If the Istio policies are installed: audit's port 8081 requires mTLS
+#      and accepts only the expenses identity
 #
 # Starts short-lived probe pods (restricted, non-root) with different labels and
 # checks which connections succeed. Every "blocked" expectation has a positive
@@ -91,6 +93,52 @@ check outsider "$(svc postgres)"       5432 blocked "database not reachable from
 check outsider "$(svc audit-internal)" 8081 blocked "event ingestion not reachable from outside" "$PROBE_NS"
 check outsider "$(svc expenses)"       9090 blocked "metrics not reachable from outside" "$PROBE_NS"
 check outsider "$(svc audit)"          9090 blocked "metrics not reachable from outside" "$PROBE_NS"
+
+# 3. Mesh: checked at the HTTP level. A TCP connect is not enough, because
+# with STRICT mTLS the audit sidecar accepts the TCP connection and only
+# rejects the TLS handshake.
+if k get peerauthentication audit-internal-mtls >/dev/null 2>&1; then
+  step "Istio mTLS and authorization on audit:8081"
+  # Meshed probes carry the expenses name label, so NetworkPolicy lets them
+  # through to 8081 and to istiod; only the mesh can reject them.
+  mesh_pod() { # name serviceaccount
+    k delete pod "$1" --ignore-not-found --wait=true >/dev/null
+    k run "$1" --image="$IMAGE" --restart=Never \
+      --labels="app.kubernetes.io/name=expenses,sidecar.istio.io/inject=true" --overrides='{
+      "spec": {
+        "serviceAccountName": "'"$2"'",
+        "automountServiceAccountToken": false,
+        "securityContext": {"runAsNonRoot": true, "runAsUser": 65534, "runAsGroup": 65534, "seccompProfile": {"type": "RuntimeDefault"}},
+        "containers": [{
+          "name": "probe", "image": "'"$IMAGE"'", "command": ["sleep", "300"],
+          "resources": {"requests": {"cpu": "5m", "memory": "8Mi"}, "limits": {"cpu": "50m", "memory": "16Mi"}},
+          "securityContext": {"allowPrivilegeEscalation": false, "readOnlyRootFilesystem": true, "capabilities": {"drop": ["ALL"]}}
+        }]}}' >/dev/null
+  }
+  k create serviceaccount netpol-probe --dry-run=client -o yaml | k apply -f - >/dev/null
+  mesh_pod mesh-as-expenses expenses
+  mesh_pod mesh-as-other netpol-probe
+  cleanup_mesh() { k delete pod mesh-as-expenses mesh-as-other --ignore-not-found --wait=false >/dev/null; k delete serviceaccount netpol-probe --ignore-not-found >/dev/null; }
+  trap 'cleanup; cleanup_mesh' EXIT
+  k wait --for=condition=Ready pod/mesh-as-expenses pod/mesh-as-other --timeout=120s >/dev/null
+
+  # status <pod>: HTTP status of GET http://audit-internal:8081/internal/v1/events, or "reset"
+  status() {
+    local out
+    out="$(k exec "$1" -c probe -- wget -S -q -O /dev/null -T 5 http://audit-internal:8081/internal/v1/events 2>&1 || true)"
+    if grep -qE 'HTTP/1\.[01] [0-9]+' <<<"$out"; then grep -oE 'HTTP/1\.[01] [0-9]+' <<<"$out" | tail -1 | awk '{print $2}'; else echo reset; fi
+  }
+  mesh_check() { # pod expected-pattern description
+    local got mark=ok
+    got="$(status "$1")"
+    [[ "$got" =~ ^($2)$ ]] || { mark=FAIL; fail=1; }
+    printf '  %-4s %-18s -> %-22s %-8s (%s)\n' "$mark" "$1" "audit-internal:8081" "$got" "$3"
+  }
+  mesh_check probe-as-expenses reset   "no sidecar: plaintext refused by STRICT mTLS"
+  mesh_check mesh-as-other     403     "mTLS, other ServiceAccount: denied by AuthorizationPolicy"
+  # 405: the app itself answers (the route only accepts POST), so the mesh let it through.
+  mesh_check mesh-as-expenses  405     "mTLS as expenses: reaches the app (control)"
+fi
 
 echo
 [[ $fail == 0 ]] && echo "all cluster controls behave as expected" || echo "MISMATCH: see FAIL lines above"

@@ -124,6 +124,8 @@ jobs:
           cache-dependency-path: "**/go.sum"
       - name: Create kind cluster
         run: go run sigs.k8s.io/kind@v0.33.0 create cluster --name ci --wait 120s
+      - name: Install pinned istioctl (checksum-verified)
+        run: make istioctl
       - run: ./scripts/deploy-local.sh
       - run: make verify-cluster
       - run: make e2e

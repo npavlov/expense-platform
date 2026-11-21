@@ -57,7 +57,7 @@ is verified.
 | T8 | T | B2 | Retry after timeout creates a second claim | H/M | Mitigate: mandatory `Idempotency-Key`, scoped per employee, request hash | `TestIdempotentSubmit`, `TestConcurrentCreateWithSameKey`, e2e `TestIdempotentRetryOverHTTP` |
 | T9 | T | B2 | Mass assignment (`status`, `employee_id` in body), negative/zero/huge amounts, oversized body | H/M | Mitigate: strict decoder (unknown fields rejected), validation, DB checks, 4 KiB limit | `TestSubmitInputBoundaries`, `TestClaimsTableEnforcesRules` |
 | T10 | T | B4 | Amount edited after approval | L/H | Mitigate: app role has no UPDATE on amount/description; the event carries the decided amount | `TestDatabaseEnforcesRules` |
-| T11 | S | B3 | Forged event posted to audit by any pod or from outside | M/H | Mitigate: NetworkPolicy on 8081, HMAC signature over raw body, port not routed | `TestIngestRequiresValidSignature`; `verify-cluster.sh` (8081 blocked from other pods and namespaces) |
+| T11 | S | B3 | Forged event posted to audit by any pod or from outside | M/H | Mitigate: NetworkPolicy on 8081, HMAC signature over raw body, port not routed; locally also Istio STRICT mTLS on 8081 and an AuthorizationPolicy that admits only the `expenses` ServiceAccount identity | `TestIngestRequiresValidSignature`; `verify-cluster.sh` (8081 blocked from other pods and namespaces; plaintext reset, other identity 403, expenses identity reaches the app) |
 | T12 | T/R | B3 | Replay or redelivery of an event creates a second history entry | H/M | Mitigate: ±5 min timestamp window + `event_id` primary key; conflicting content rejected | `TestIngest`, `TestRecordDeduplicates`, `TestConcurrentRedelivery`, `TestWorkerRedeliversAfterLostResponse` |
 | T13 | R | B4 | Audit history altered or deleted | L/H | Mitigate: INSERT/SELECT-only role, triggers against UPDATE/DELETE/TRUNCATE (also for the owner) | `TestHistoryIsAppendOnly` |
 | T14 | I/E | B4 | SQL injection | L/H | Mitigate: constant SQL with parameters only; no dynamic identifiers; least-privilege roles | code review (`internal/storage`), gosec in CI |
@@ -82,12 +82,12 @@ Owner: repository owner. Formal exceptions with expiry dates are in
 | ID | Risk | Why accepted here | Production answer |
 |---|---|---|---|
 | R1 | Single node, single AZ, same-region snapshots: an instance, zone or account compromise can take data and backups together | cost of a demo | multi-AZ RDS, cross-account immutable backups |
-| R2 | Service-to-service auth is a shared static HMAC key (rotatable, but long-lived) | simple, testable, no CA to run | workload identity / mTLS (service mesh, SPIFFE) |
-| R3 | In-cluster traffic (pods ↔ PostgreSQL, expenses → audit) is not encrypted | single node; traffic stays on the host | TLS to the database, mTLS between services |
+| R2 | AWS stand: service-to-service auth is only the shared HMAC key (rotatable, but long-lived). The local stand adds Istio mTLS with per-ServiceAccount identities (SPIFFE) on audit's 8081 | no mesh on the single-node AWS stand (memory, cost) | run the same Istio policies in AWS, or SPIFFE/mTLS without a mesh |
+| R3 | In-cluster traffic to PostgreSQL is not encrypted; expenses → audit is encrypted by Istio mTLS locally only | single node; traffic stays on the host | TLS to the database, mesh mTLS in every environment |
 | R4 | Image signatures are produced but not verified at admission | needs a policy controller | Kyverno / Sigstore policy-controller in enforce mode |
 | R5 | Kubernetes Secrets are the source of truth (base64, encrypted at rest by k3s on AWS only) | no external secret store | Secrets Manager + External Secrets, short-lived DB credentials |
 | R6 | No rate limiting or WAF | demo traffic | Traefik rate-limit middleware or AWS WAF, per-user quotas |
-| R7 | Labels drive NetworkPolicy; anyone who can create pods in the namespace can impersonate `expenses` on the network (the HMAC key still stops forged events) | namespace access = admin here | admission policy restricting labels, RBAC per team |
+| R7 | Labels drive NetworkPolicy and the mesh trusts the ServiceAccount: anyone who can create pods in the namespace can label a pod `expenses` and run it under the `expenses` ServiceAccount, and then passes NetworkPolicy and the AuthorizationPolicy (including future replicas, by design). The HMAC key still stops forged events | namespace access = admin here | admission policy restricting labels and ServiceAccounts, RBAC per team |
 | R8 | Logs stay on the node (kubectl logs, k3s audit log); no central, tamper-proof log store | cost | ship to a separate account with retention lock |
 | R9 | No velocity limits (splitting a large expense into small claims) | out of scope for v1 | per-employee limits and anomaly detection |
 | R10 | Cognito users have optional MFA and password auth for the CLI demo | demo convenience | enforce phishing-resistant MFA via SSO/passkeys |

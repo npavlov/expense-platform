@@ -1,7 +1,8 @@
 # Run `make help` for the list of targets.
 #
 # Requirements: Go 1.26+, Docker Desktop with Kubernetes enabled, kubectl, jq,
-# curl, openssl. Scanners and Terraform run from pinned container images or
+# curl, openssl; istioctl at the version in scripts/istio-version.sh (or run
+# `make istioctl`). Scanners and Terraform run from pinned container images or
 # pinned `go run` versions, so nothing else has to be installed.
 
 MODULES := libs/platform services/expenses services/audit tools/devidp tests
@@ -20,7 +21,8 @@ ACTIONLINT  := rhysd/actionlint:1.7.8@sha256:96d4a8c87dbbfb3bdd324f8fdc285fc3df5
 TF_DIR := infra/terraform/aws
 
 .DEFAULT_GOAL := help
-.PHONY: help test vet fmt fmt-check test-integration fuzz vuln sast k8s-lint \
+
+.PHONY: help istioctl test vet fmt fmt-check test-integration fuzz vuln sast k8s-lint \
         local-up local-status local-stop local-start local-destroy clean-images port-forward port-forward-stop \
         e2e demo obs-demo verify-cluster backup restore-check outbox-status trace \
         tf-fmt tf-validate tf-lint tf-scan api-lint gha-lint secrets-scan image-scan check
@@ -61,6 +63,9 @@ k8s-lint: ## Validate rendered overlays against Kubernetes schemas and the polic
 	cd tests && go test -count=1 ./manifests/
 
 ## --- Local stand (Docker Desktop Kubernetes, namespace expense-platform-local)
+
+istioctl: ## Install the pinned, checksum-verified istioctl into .local/bin
+	./scripts/install-istioctl.sh
 
 local-up: ## Build images and deploy or update the stand (OBSERVABILITY=1 adds Prometheus)
 	./scripts/deploy-local.sh

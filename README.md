@@ -49,10 +49,13 @@ contracts: [contracts/](contracts/).
 ## Quick start (local)
 
 Requirements: macOS or Linux with **Docker Desktop and its Kubernetes
-enabled**, Go 1.26+ (the `go` command downloads the pinned 1.27.4 toolchain itself), kubectl, jq, curl, openssl. Everything else (Terraform,
+enabled**, Go 1.26+ (the `go` command downloads the pinned 1.27.4 toolchain itself),
+kubectl, jq, curl, openssl, and istioctl at the pinned version (`make istioctl`
+installs it into `.local/bin`, checksum-verified). Everything else (Terraform,
 scanners) runs from pinned container images or pinned `go run` versions.
 
 ```bash
+make istioctl           # pinned istioctl into .local/bin (once)
 make test               # unit tests, all modules
 make test-integration   # real PostgreSQL in a throwaway container
 make local-up           # build images, deploy to namespace expense-platform-local
@@ -61,7 +64,10 @@ make e2e                # end-to-end suite through the local APIs
 ```
 
 `make local-up` deploys into the Docker Desktop context only, into its own
-namespace, generates secrets outside Git and keeps data across redeploys. The
+namespace, generates secrets outside Git and keeps data across redeploys.
+It also installs Istio cluster-wide; expenses and audit get sidecars, and
+audit's event port requires mTLS from the expenses identity
+([architecture](docs/architecture.md#service-mesh-on-the-local-stand)). The
 APIs are on `127.0.0.1:30080` (expenses), `:30081` (audit), `:30082` (local
 tokens), loopback only. `make help` lists every target; stopping, restarting
 and deleting the stand are in [docs/operations.md](docs/operations.md).
