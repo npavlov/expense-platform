@@ -23,7 +23,7 @@ configMapGenerator:
 
 images:
   # Published by .github/workflows/release.yml; deploy pins them by digest.
-  - {name: expense-platform/expenses, newName: ghcr.io/npavlov/expense-platform-expenses, newTag: placeholder}
+  - {name: expense-platform/expenses, newName: ghcr.io/npavlov/expense-platform-expenses, digest: sha256:6af714878784691d7705bf8f24bc2a6eb12bc2b45f346e6298603d1c34b382f9}
   - {name: expense-platform/audit, newName: ghcr.io/npavlov/expense-platform-audit, newTag: placeholder}
 
 patches:
