@@ -68,6 +68,8 @@ Port 8081 has no ingress route and no host port; port 8080 does not serve
 
 ### Service mesh on the local stand
 
+The AWS deployment uses the same policies with the namespace and ServiceAccount principal adapted by `deploy/istio/aws/kustomization.yaml`. Its install profile supplies the k3s CNI paths.
+
 Locally, `scripts/deploy-local.sh` installs Istio (pinned version in
 `scripts/istio-version.sh`, minimal profile with the Istio CNI plugin, so pods
 need no privileged init container and stay Pod Security `restricted`) and
@@ -82,8 +84,7 @@ path:
 | `audit-mtls.yaml` (PeerAuthentication) | port 8081 of the audit pods is STRICT: a connection without mesh mTLS is reset |
 | `audit-authz.yaml` (AuthorizationPolicy, DENY) | requests to 8081 whose mTLS identity is not `spiffe://cluster.local/ns/expense-platform-local/sa/expenses` get 403 |
 
-The HMAC signature stays: it protects the event content end to end and is
-the only service authentication on the AWS stand, which runs without a mesh.
+Both stands verify the event HMAC after the mesh authenticates the calling workload.
 Ports 8080 and 9090 keep the mesh default (permissive), so probes,
 port-forwards and Prometheus are unchanged. `make verify-cluster` checks all
 three outcomes (plaintext reset, other identity 403, expenses identity

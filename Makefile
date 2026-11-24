@@ -22,7 +22,7 @@ TF_DIR := infra/terraform/aws
 
 .DEFAULT_GOAL := help
 
-.PHONY: help istioctl test vet fmt fmt-check test-integration fuzz vuln sast k8s-lint \
+.PHONY: aws-up help istioctl test vet fmt fmt-check test-integration fuzz vuln sast k8s-lint \
         local-up local-status local-stop local-start local-destroy clean-images port-forward port-forward-stop \
         e2e demo obs-demo verify-cluster backup restore-check outbox-status trace \
         tf-fmt tf-validate tf-lint tf-scan api-lint gha-lint secrets-scan image-scan check
@@ -66,6 +66,9 @@ k8s-lint: ## Validate rendered overlays against Kubernetes schemas and the polic
 
 istioctl: ## Install the pinned, checksum-verified istioctl into .local/bin
 	./scripts/install-istioctl.sh
+
+aws-up: ## Provision AWS and deploy the pinned release through HTTPS readiness
+	bash scripts/aws/up.sh
 
 local-up: ## Build images and deploy or update the stand (OBSERVABILITY=1 adds Prometheus)
 	./scripts/deploy-local.sh

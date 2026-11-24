@@ -59,6 +59,23 @@ internal port 8081, metrics 9090, the admin listener (loopback in the pod).
 - GHCR images published by the `release` workflow (needs a GitHub
   environment `release` and package write permission for the repository).
 
+## Bring up the infrastructure and application together
+
+From the repository root, run `make aws-up` after configuring
+`infra/terraform/aws/terraform.tfvars` and signing in with the AWS CLI.
+Close any manual port-forward on 16443 first. The command checks the published
+ARM64 release images, plans against the existing local Terraform state, and
+asks for confirmation if the plan contains changes. It then waits for SSM and
+k3s, installs Istio with the k3s CNI paths, deploys PostgreSQL and both services,
+and checks the public HTTPS endpoint. The AWS profile sets the istiod memory
+request to 256 MiB for the single-node lab. Only expenses and audit receive
+sidecars. Port 8081 on audit requires mTLS and the expenses ServiceAccount.
+The Go services also verify the event HMAC. A mesh rollout can use the existing
+release digests.
+Keep the local Terraform state across runs. To select a newer published release,
+set both `EXPENSES_IMAGE` and `AUDIT_IMAGE` to its digest references.
+Demo user creation is a separate operation because it resets their passwords.
+
 ## Steps
 
 ### 1. Publish images

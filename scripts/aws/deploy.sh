@@ -15,6 +15,7 @@ done
 [[ -f "$KUBECONFIG" ]] || "$root/scripts/aws/kubeconfig.sh"
 start_tunnel
 guard_target "$CTX" "$NS"
+k wait --for=condition=Ready node/expense-platform --timeout=300s
 
 host="$(tf_out hostname)"; issuer="$(tf_out cognito_issuer)"; client="$(tf_out cognito_client_id)"
 gen="$root/.local/k8s/aws"; mkdir -p "$gen"
@@ -40,9 +41,20 @@ step "Namespace and secrets"
 kubectl --context "$CTX" apply -f "$root/deploy/k8s/overlays/aws/namespace.yaml" >/dev/null
 "$root/scripts/secrets.sh" "$CTX" "$NS"
 
+step "Install Istio with k3s CNI and apply mesh policies"
+source "$root/scripts/istio-version.sh"
+if ! istioctl="$(resolve_istioctl "$root")"; then
+  "$root/scripts/install-istioctl.sh"
+  istioctl="$(resolve_istioctl "$root")"
+fi
+"$istioctl" install --context "$CTX" -f "$root/deploy/istio/local/install.yaml" -f "$root/deploy/istio/aws/install.yaml" -y
+kubectl --context "$CTX" -n istio-system rollout status daemonset/istio-cni-node --timeout=5m
+kubectl --context "$CTX" -n istio-system rollout status deployment/istiod --timeout=5m
+kubectl --context "$CTX" apply -k "$root/deploy/istio/aws"
+
 step "Apply"
 k delete job -l expense-platform/job=setup --ignore-not-found >/dev/null
-kubectl --context "$CTX" apply -k "$gen" | grep -v unchanged || true
+kubectl --context "$CTX" apply -k "$gen"
 k rollout status statefulset/postgres --timeout=300s
 k wait --for=condition=complete job/db-bootstrap job/expenses-migrate job/audit-migrate --timeout=300s
 for d in audit expenses; do k rollout status "deployment/$d" --timeout=300s; done
@@ -53,4 +65,5 @@ for _ in $(seq 1 60); do
   [[ "$code" == 200 ]] && break; sleep 5   # the first certificate takes a moment
 done
 echo "https://$host/health -> $code"
-curl -sI "http://$host/health" | head -1 | sed 's/^/http:  /'
+[[ "$code" == 200 ]] || { echo "Public HTTPS health check failed" >&2; exit 1; }
+curl --max-time 10 -sI "http://$host/health" | head -1 | sed 's/^/http:  /'

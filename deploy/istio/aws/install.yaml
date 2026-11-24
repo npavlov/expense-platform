@@ -1,0 +1,14 @@
+# Overrides for the lab's single k3s server; layered over ../local/install.yaml.
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+spec:
+  values:
+    cni:
+      cniBinDir: /var/lib/expense-data/k3s/data/cni
+      cniConfDir: /var/lib/expense-data/k3s/agent/etc/cni/net.d
+    pilot:
+      autoscaleEnabled: false
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi

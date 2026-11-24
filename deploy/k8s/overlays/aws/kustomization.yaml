@@ -43,3 +43,10 @@ patches:
         value:
           - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}
             podSelector: {matchLabels: {app.kubernetes.io/name: traefik}}
+  - target:
+      kind: Deployment
+      name: "^(expenses|audit)$"
+    patch: |-
+      - op: add
+        path: /spec/template/metadata/labels/sidecar.istio.io~1inject
+        value: "true"
